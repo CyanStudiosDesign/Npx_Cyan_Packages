@@ -17,11 +17,16 @@ const reset = "\x1b[0m";
 const CONFIG_FILE = "cyan.config.json";
 const REGISTRY_ROOT = path.join(__dirname, "..", "registry", "components");
 const REGISTRY_LIB_ROOT = path.join(__dirname, "..", "registry", "lib");
+const REGISTRY_MOTION_ROOT = path.join(__dirname, "..", "registry", "motion");
 const DEFAULT_CONFIG = {
   componentsDir: "src/components",
   uiDir: "src/components/ui",
   blocksDir: "src/components/blocks",
+  textDir: "src/components/text",
+  animateDir: "src/components/animate",
+  fieldDir: "src/components/field",
   providersDir: "src/components/providers",
+  motionDir: "src/motion",
   utilsPath: "src/lib/utils.ts",
   cssPath: "src/app/globals.css",
   alias: "@",
@@ -36,26 +41,47 @@ const CATEGORY_PATHS = {
     source: path.join(REGISTRY_ROOT, "blocks"),
     targetKey: "blocksDir",
   },
+  text: {
+    source: path.join(REGISTRY_ROOT, "text"),
+    targetKey: "textDir",
+  },
+  animate: {
+    source: path.join(REGISTRY_ROOT, "animate"),
+    targetKey: "animateDir",
+  },
+  field: {
+    source: path.join(REGISTRY_ROOT, "field"),
+    targetKey: "fieldDir",
+    single: true,
+  },
   providers: {
     source: path.join(REGISTRY_ROOT, "providers"),
     targetKey: "providersDir",
+    single: true,
   },
 };
 
 const COMPONENT_DEPENDENCIES = {
   "ui/calendar": ["ui/dropdown-menu"],
+  "ui/date-picker": ["ui/calendar"],
   "ui/navigationMenu": ["ui/buttons"],
   "ui/sidebar": ["ui/provider"],
   "ui/theme": ["providers"],
   "ui/tree-view": ["ui/accordion"],
+  "blocks/terminal-code": ["blocks/terminalCode"],
 };
 
 const COMPONENT_ALIASES = {
+  breadcrumb: "breadcrumbs",
   button: "buttons",
+  "circular-text": "CircularText",
   "context-menu": "contextmenu",
+  "count-up": "CountUp",
   "navigation-menu": "navigationMenu",
+  "rotating-text": "RotatingText",
   "sidebar-provider": "provider",
   "scroll-area": "scrollArea",
+  "split-text": "SplitText",
   "theme-toggle": "theme",
   "toggle-chip": "toggle",
 };
@@ -67,6 +93,8 @@ const COMPONENT_PUBLIC_NAMES = Object.fromEntries(
   ])
 );
 
+const HIDDEN_COMPONENTS = new Set(["blocks/terminalCode"]);
+
 const IGNORED_PACKAGES = new Set([
   "react",
   "react-dom",
@@ -76,6 +104,8 @@ const IGNORED_PACKAGES = new Set([
   "next/navigation",
   "next/font/google",
 ]);
+
+const CLI_PACKAGE_NAME = packageJson.name || "cyan-ui-library";
 
 program
   .name("cyan-ui")
@@ -94,6 +124,7 @@ ${bold}${whiteBright}Start here${reset}
   ${cyanBright}$ cyan list ui${reset}                ${gray}See only UI components${reset}
   ${cyanBright}$ cyan add accordion${reset}          ${gray}Copy one component${reset}
   ${cyanBright}$ cyan add ui${reset}                 ${gray}Copy only UI components${reset}
+  ${cyanBright}$ cyan update${reset}                 ${gray}Update the Cyan UI CLI package${reset}
   ${cyanBright}$ cyan add components${reset}         ${gray}Copy everything${reset}
 
 ${bold}${whiteBright}NPX usage${reset}
@@ -143,10 +174,12 @@ program
       let copiedCount = 0;
       let skippedCount = 0;
       const needsUtils = additions.some((addition) => componentUsesUtils(addition.source));
+      const needsAlias = needsUtils || additions.some((addition) => componentUsesMotion(addition.source));
 
       ensureUtilsIfNeeded(root, config, needsUtils, dependencySet, options);
+      ensureMotionIfNeeded(root, config, additions, options.force);
 
-      if (needsUtils) {
+      if (needsAlias) {
         ensureAliasConfig(root, config);
       }
 
@@ -167,6 +200,37 @@ program
           skippedCount ? `, skipped ${skippedCount}` : ""
         }.\n`
       );
+    } catch (error) {
+      console.error("\nError:", error.message, "\n");
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("update")
+  .description("Update the Cyan UI CLI package to the latest published version")
+  .option("--local", "Update cyan-ui-library in this project instead of globally")
+  .option("--dry-run", "Print the update command without running it")
+  .action((options) => {
+    try {
+      const root = process.cwd();
+      const command = getCliUpdateCommand(root, options.local);
+
+      console.log(`\nUpdating ${CLI_PACKAGE_NAME} to latest...`);
+      console.log(`${gray}${command}${reset}\n`);
+
+      if (!options.dryRun) {
+        execSync(command, {
+          cwd: root,
+          stdio: "inherit",
+        });
+      }
+
+      console.log("");
+      console.log("Done. You can now use the latest published registry.");
+      console.log("To refresh an existing copied component, run:");
+      console.log("  cyan add <component> --force");
+      console.log("");
     } catch (error) {
       console.error("\nError:", error.message, "\n");
       process.exitCode = 1;
@@ -195,6 +259,9 @@ program
 
     printCategory("ui");
     printCategory("blocks");
+    printCategory("text");
+    printCategory("animate");
+    printCategory("field");
     printCategory("providers");
 
     console.log("Install examples:");
@@ -260,12 +327,15 @@ function resolveAdditions(name) {
     return [
       ...listCategoryAdditions("ui"),
       ...listCategoryAdditions("blocks"),
+      ...listCategoryAdditions("text"),
+      ...listCategoryAdditions("animate"),
+      categoryAddition("field"),
       categoryAddition("providers"),
     ].filter(Boolean);
   }
 
   if (CATEGORY_PATHS[normalizedName]) {
-    return normalizedName === "providers"
+    return CATEGORY_PATHS[normalizedName].single
       ? [categoryAddition(normalizedName)].filter(Boolean)
       : listCategoryAdditions(normalizedName);
   }
@@ -340,6 +410,10 @@ function listCategoryAdditions(category) {
     return [];
   }
 
+  if (categoryInfo.single) {
+    return [categoryAddition(category)].filter(Boolean);
+  }
+
   return fs
     .readdirSync(categoryInfo.source)
     .filter((entry) => {
@@ -389,6 +463,34 @@ function copyAddition(root, config, addition, force) {
 
   console.log(`Added ${addition.name} -> ${path.relative(root, target)}`);
   return { copied: true, skipped: false };
+}
+
+function ensureMotionIfNeeded(root, config, additions, force) {
+  const needsMotion = additions.some((addition) => componentUsesMotion(addition.source));
+
+  if (!needsMotion) {
+    return;
+  }
+
+  const source = REGISTRY_MOTION_ROOT;
+  const target = path.join(root, config.motionDir);
+
+  if (!fs.existsSync(source)) {
+    console.log("Warning: registry/motion is missing, so motion helpers were not copied.");
+    return;
+  }
+
+  if (fs.existsSync(target) && !force) {
+    console.log(`Skipped motion helpers; ${config.motionDir} already exists.`);
+    return;
+  }
+
+  fs.copySync(source, target, {
+    overwrite: Boolean(force),
+    errorOnExist: !force,
+    filter: (sourcePath) => !sourcePath.endsWith(".DS_Store"),
+  });
+  console.log(`Added motion helpers -> ${config.motionDir}`);
 }
 
 function ensureUtilsIfNeeded(root, config, needsUtils, dependencySet, options) {
@@ -469,6 +571,13 @@ function componentUsesUtils(sourcePath) {
   return listCodeFiles(sourcePath).some((file) => {
     const content = fs.readFileSync(file, "utf8");
     return content.includes("@/lib/utils") || content.includes("from \"../lib/utils\"");
+  });
+}
+
+function componentUsesMotion(sourcePath) {
+  return listCodeFiles(sourcePath).some((file) => {
+    const content = fs.readFileSync(file, "utf8");
+    return content.includes("@/motion/");
   });
 }
 
@@ -608,12 +717,35 @@ function getInstallCommand(packageManager, dependencies) {
   return `npm install ${dependencyList}`;
 }
 
+function getCliUpdateCommand(root, local) {
+  const packageManager = detectPackageManager(root);
+  const packageName = `${CLI_PACKAGE_NAME}@latest`;
+
+  if (local) {
+    return getInstallCommand(packageManager, [packageName]);
+  }
+
+  if (packageManager === "pnpm") {
+    return `pnpm add -g ${packageName}`;
+  }
+
+  if (packageManager === "yarn") {
+    return `yarn global add ${packageName}`;
+  }
+
+  if (packageManager === "bun") {
+    return `bun add -g ${packageName}`;
+  }
+
+  return `npm install -g ${packageName}`;
+}
+
 function printAvailable() {
   const available = Object.keys(CATEGORY_PATHS)
     .flatMap((category) =>
-      listCategoryAdditions(category).map(
-        (addition) => `${category}/${getPublicComponentName(addition.name)}`
-      )
+      listCategoryAdditions(category)
+        .filter((addition) => !isHiddenAddition(addition))
+        .map((addition) => `${category}/${getPublicComponentName(addition.name)}`)
     )
     .join("\n  ");
 
@@ -631,6 +763,7 @@ function printLibraryIntro() {
 
 function printCategory(category) {
   const additions = listCategoryAdditions(category);
+  const visibleAdditions = additions.filter((addition) => !isHiddenAddition(addition));
 
   if (category === "providers" && additions.length === 0 && fs.existsSync(CATEGORY_PATHS.providers.source)) {
     console.log("Providers");
@@ -639,16 +772,16 @@ function printCategory(category) {
     return;
   }
 
-  if (additions.length === 0) {
+  if (visibleAdditions.length === 0) {
     console.log(`${formatCategoryTitle(category)}`);
     console.log("  No items found.");
     console.log("");
     return;
   }
 
-  console.log(`${formatCategoryTitle(category)} (${additions.length})`);
+  console.log(`${formatCategoryTitle(category)} (${visibleAdditions.length})`);
 
-  for (const addition of additions) {
+  for (const addition of visibleAdditions) {
     console.log(`  ${getPublicComponentName(addition.name)}`);
   }
 
@@ -678,9 +811,25 @@ function formatCategoryTitle(category) {
     return "Providers";
   }
 
+  if (category === "text") {
+    return "Text Components";
+  }
+
+  if (category === "animate") {
+    return "Animation Components";
+  }
+
+  if (category === "field") {
+    return "Field Components";
+  }
+
   return category;
 }
 
 function getPublicComponentName(name) {
   return COMPONENT_PUBLIC_NAMES[name] || name;
+}
+
+function isHiddenAddition(addition) {
+  return HIDDEN_COMPONENTS.has(`${addition.category}/${addition.name}`);
 }

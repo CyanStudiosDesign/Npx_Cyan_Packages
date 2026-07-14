@@ -1,0 +1,85 @@
+.root {
+  --rotating-text-duration: 0.42s;
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.item {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.word {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+.space {
+  white-space: pre-wrap;
+}
+
+.character {
+  display: inline-block;
+  will-change: opacity, filter, transform;
+}
+
+.item[data-phase="enter"] .character {
+  animation: rotating-text-enter var(--rotating-text-duration)
+    cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.item[data-phase="exit"] .character {
+  animation: rotating-text-exit var(--rotating-text-duration)
+    cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes rotating-text-enter {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(105%) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes rotating-text-exit {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) rotateX(0);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(-105%) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .character,
+  .item[data-phase="enter"] .character,
+  .item[data-phase="exit"] .character {
+    animation: none;
+    filter: none;
+    transform: none;
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

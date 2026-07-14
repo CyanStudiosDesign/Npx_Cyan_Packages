@@ -1,0 +1,83 @@
+.root {
+  --text-split-duration: 0.7s;
+  --text-split-from-opacity: 0;
+  --text-split-from-x: 0px;
+  --text-split-from-y: 0.75em;
+  --text-split-from-scale: 1;
+  --text-split-from-filter: none;
+  --text-split-to-opacity: 1;
+  --text-split-to-x: 0px;
+  --text-split-to-y: 0px;
+  --text-split-to-scale: 1;
+  --text-split-to-filter: none;
+}
+
+.visual {
+  display: inline;
+}
+
+.word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.space {
+  white-space: pre-wrap;
+}
+
+.part {
+  display: inline-block;
+  opacity: var(--text-split-from-opacity);
+  filter: var(--text-split-from-filter);
+  transform: translate3d(var(--text-split-from-x), var(--text-split-from-y), 0)
+    scale(var(--text-split-from-scale));
+  animation-duration: var(--text-split-duration);
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+  will-change: opacity, filter, transform;
+}
+
+.root[data-started="true"] .part {
+  animation-name: text-split-enter;
+}
+
+.line {
+  display: block;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes text-split-enter {
+  from {
+    opacity: var(--text-split-from-opacity);
+    filter: var(--text-split-from-filter);
+    transform: translate3d(var(--text-split-from-x), var(--text-split-from-y), 0)
+      scale(var(--text-split-from-scale));
+  }
+
+  to {
+    opacity: var(--text-split-to-opacity);
+    filter: var(--text-split-to-filter);
+    transform: translate3d(var(--text-split-to-x), var(--text-split-to-y), 0)
+      scale(var(--text-split-to-scale));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .part {
+    opacity: var(--text-split-to-opacity);
+    filter: var(--text-split-to-filter);
+    transform: none;
+    animation: none;
+  }
+}

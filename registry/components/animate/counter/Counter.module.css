@@ -1,0 +1,52 @@
+.root {
+  --counter-duration: 0.45s;
+  display: inline-flex;
+  align-items: baseline;
+  color: currentColor;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-none);
+}
+
+.value {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.static {
+  display: inline-block;
+}
+
+.place {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.digit {
+  display: inline-block;
+  width: 1ch;
+  height: 1em;
+  overflow: hidden;
+  vertical-align: -0.08em;
+}
+
+.reel {
+  display: grid;
+  grid-template-rows: repeat(10, 1em);
+  width: 1ch;
+  transition: transform var(--counter-duration) cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+
+.reelNumber {
+  display: grid;
+  width: 1ch;
+  height: 1em;
+  place-items: center;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reel {
+    transition: none;
+  }
+}
